@@ -20,5 +20,6 @@ FetchContent_MakeAvailable(googletest)
 
 add_library(sockbuf src/sockbuf.cpp src/sockbuf.h)
 
-add_executable(sockbuf-test test/sockbuf.test.cpp)
+add_executable(sockbuf-test test/sockbuf.test.cpp test/sockbuf.test.h)
 target_link_libraries(sockbuf-test PUBLIC sockbuf gtest_main)
+target_include_directories(sockbuf-test PUBLIC src)
