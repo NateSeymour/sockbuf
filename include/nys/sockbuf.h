@@ -22,35 +22,18 @@ namespace nys
         Server
     };
 
-    class SocketAddress
+    struct SocketProperties
     {
+        std::shared_ptr<struct sockaddr> address;
+        bool bound = false;
+        size_t size = 0;
+        size_t length = 0;
+        int domain = 0;
+        int type = 0;
+        int protocol = 0; // Internet protocol
 
-    };
-
-    class FileDescriptor
-    {
-    protected:
-        int fd_ = -1;
-
-    public:
-        [[nodiscard]] int get() const
-        {
-            return this->fd_;
-        }
-
-        ~FileDescriptor()
-        {
-            if(this->fd_ != -1)
-            {
-                close(this->fd_);
-            }
-        }
-
-        explicit FileDescriptor(int fd) : fd_(fd) {}
-
-        FileDescriptor() = delete;
-        FileDescriptor(const FileDescriptor&) = delete;
-        FileDescriptor(FileDescriptor&&) = delete;
+        uint32_t options = 0;
+        SockMode mode = SockMode::Client;
     };
 
     class sockbuf : public std::streambuf
@@ -62,17 +45,10 @@ namespace nys
         void Connect();
         void Listen();
 
-    protected:
-        std::shared_ptr<struct sockaddr> address;
-        bool bound = false;
-        size_t size = 0;
-        size_t length = 0;
-        int domain = 0;
-        int type = 0;
-        int protocol = 0; // Internet protocol
+        int fd_ = -1;
 
-        uint32_t options = 0;
-        SockMode mode = SockMode::Client;
+    protected:
+        SocketProperties props;
 
         // Output operations
         std::streamsize xsputn(const char_type* s, std::streamsize n) override;
@@ -85,11 +61,16 @@ namespace nys
         int uflow() override;
 
     public:
-        std::shared_ptr<FileDescriptor> fd;
+        [[nodiscard]] int fd() const
+        {
+            return this->fd_;
+        }
 
         static sockbuf UnixSocket(const std::filesystem::path& path, SockMode mode = SockMode::Client, uint32_t options = 0);
 
         sockbuf Accept();
+
+        sockbuf(const sockbuf& other) : props(other.props), fd_(dup(other.fd_)) {}
     };
 
     class socket_error : public std::exception
