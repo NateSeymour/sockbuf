@@ -6,68 +6,84 @@
 
 using namespace nys::whisper;
 
-std::shared_ptr<sockbuf> sockbuf::Empty()
+sockbuf sockbuf::UnixSocket(const std::filesystem::path& path, SockMode mode, uint32_t options)
 {
-    /*
-     * Workaround to call the private constructor of `sockbuf` through std::make_shared
-     * https://stackoverflow.com/a/25069711
-     */
-    struct sockbuf_constructor : public sockbuf {};
-    return std::make_shared<sockbuf_constructor>();
-}
+    sockbuf socket;
 
-std::shared_ptr<sockbuf> sockbuf::UnixSocket(const std::filesystem::path& path)
-{
-    auto socket = sockbuf::Empty();
-
-    socket->domain = PF_LOCAL;
-    socket->type = SOCK_STREAM;
+    socket.options = options;
+    socket.mode = mode;
+    socket.domain = PF_LOCAL;
+    socket.type = SOCK_STREAM;
 
     if(path.string().length() > 103)
     {
         throw std::runtime_error("Socket path too long!");
     }
 
-    socket->size = sizeof(sockaddr_un);
-    socket->address = std::shared_ptr<struct sockaddr>(static_cast<struct sockaddr*>(malloc(socket->size)), free);
+    socket.size = sizeof(sockaddr_un);
+    socket.address = std::shared_ptr<struct sockaddr>(static_cast<struct sockaddr*>(malloc(socket.size)), free);
 
     // Set the socket address
-    memset(socket->address.get(), 0, sizeof(sockaddr_un));
-    ((sockaddr_un*)socket->address.get())->sun_family = socket->domain;
+    memset(socket.address.get(), 0, sizeof(sockaddr_un));
+    ((sockaddr_un*)socket.address.get())->sun_family = socket.domain;
 
-    socket->length = strlen(path.c_str()) + 1;
-    ((sockaddr_un*)socket->address.get())->sun_len = socket->length;
+    socket.length = strlen(path.c_str()) + 1;
+    ((sockaddr_un*)socket.address.get())->sun_len = socket.length;
 
-    memcpy(((sockaddr_un*)socket->address.get())->sun_path, path.c_str(), socket->length);
+    memcpy(((sockaddr_un*)socket.address.get())->sun_path, path.c_str(), socket.length);
 
     // Create the socket with `socket()`
-    socket->Create();
+    socket.Create();
 
     return socket;
 }
 
 void sockbuf::Connect()
 {
-
+    if(connect(this->fd->get(), (struct sockaddr*)this->address.get(), this->size) != 0)
+    {
+        throw socket_error(this);
+    }
 }
 
 void sockbuf::Create()
 {
     // Create socket
-    this->fd = socket(this->domain, this->type, this->protocol);
-    if(this->fd == -1)
+    int sockfd = socket(this->domain, this->type, this->protocol);
+    this->fd = std::make_unique<FileDescriptor>(sockfd);
+    if(this->fd->get() == -1)
     {
         throw socket_error(this);
     }
 
-    // Make the socket non-blocking
-    fcntl(this->fd, F_SETFL, O_NONBLOCK);
+    // socket options
+    if(this->options & (uint32_t)SockOpts::NonBlocking)
+    {
+        fcntl(this->fd->get(), F_SETFL, O_NONBLOCK);
+    }
+
+    // Bind and listen or connect, depending on the socket type
+    switch(this->mode)
+    {
+        case SockMode::Server:
+        {
+            this->Bind();
+            this->Listen();
+            break;
+        }
+
+        case SockMode::Client:
+        {
+            this->Connect();
+            break;
+        }
+    }
 }
 
 void sockbuf::Bind()
 {
     // Bind to the socket
-    if(bind(this->fd, this->address.get(), this->size) != 0)
+    if(bind(this->fd->get(), this->address.get(), this->size) != 0)
     {
         throw socket_error(this);
     }
@@ -78,36 +94,17 @@ void sockbuf::Bind()
 void sockbuf::Listen()
 {
     // Start listening
-    if(listen(this->fd, 10) != 0)
+    if(listen(this->fd->get(), 10) != 0)
     {
         throw socket_error(this);
     }
 }
 
-sockbuf::~sockbuf()
+sockbuf sockbuf::Accept()
 {
-    if(this->fd != -1)
-    {
-        close(this->fd);
-    }
+    auto socket = *this;
 
-    if(this->bound && this->type == PF_LOCAL)
-    {
-        unlink(this->address->sa_data);
-    }
-}
-
-std::shared_ptr<sockbuf> sockbuf::Accept()
-{
-    auto socket = sockbuf::Empty();
-
-    socket->address = this->address;
-    socket->size = this->size;
-    socket->length = this->length;
-    socket->type = this->type;
-    socket->domain = this->domain;
-    socket->protocol = this->protocol;
-    socket->fd = accept(this->fd, nullptr, nullptr);
+    socket.fd = std::make_unique<FileDescriptor>(accept(this->fd->get(), nullptr, nullptr));
 
     return socket;
 }
@@ -117,7 +114,7 @@ std::streamsize sockbuf::xsputn(const char *s, std::streamsize n)
     std::streamsize total_bytes_written = 0;
     while(total_bytes_written < n)
     {
-        ssize_t bytes_written = write(this->fd, s + total_bytes_written, n - total_bytes_written);
+        ssize_t bytes_written = write(this->fd->get(), s + total_bytes_written, n - total_bytes_written);
 
         if(bytes_written == -1)
         {
@@ -133,7 +130,7 @@ std::streamsize sockbuf::xsputn(const char *s, std::streamsize n)
 int sockbuf::overflow(int ch)
 {
     char casted_ch = (char)ch;
-    ssize_t bytes_written = write(this->fd, &casted_ch, sizeof(char));
+    ssize_t bytes_written = write(this->fd->get(), &casted_ch, sizeof(char));
 
     if(bytes_written == -1)
     {
@@ -145,18 +142,18 @@ int sockbuf::overflow(int ch)
 
 std::streamsize sockbuf::showmanyc()
 {
-    return ioctl(this->fd, FIONREAD);
+    return ioctl(this->fd->get(), FIONREAD);
 }
 
 std::streamsize sockbuf::xsgetn(char *s, std::streamsize n)
 {
-    return read(this->fd, s, n);
+    return read(this->fd->get(), s, n);
 }
 
 int sockbuf::underflow()
 {
     char underflow_ch = 0;
-    ssize_t bytes_read = recv(this->fd, &underflow_ch, sizeof(char), MSG_PEEK | MSG_DONTWAIT);
+    ssize_t bytes_read = recv(this->fd->get(), &underflow_ch, sizeof(char), MSG_PEEK | MSG_DONTWAIT);
 
     if(bytes_read == -1)
     {
@@ -169,7 +166,7 @@ int sockbuf::underflow()
 int sockbuf::uflow()
 {
     char underflow_ch = 0;
-    ssize_t bytes_read = read(this->fd, &underflow_ch, sizeof(char));
+    ssize_t bytes_read = read(this->fd->get(), &underflow_ch, sizeof(char));
 
     if(bytes_read == -1)
     {
