@@ -17,9 +17,9 @@ option(INSTALL_GTEST "Enable installation of googletest." OFF)
 FetchContent_MakeAvailable(googletest)
 
 # sockbuf
+add_library(sockbuf src/sockbuf.cpp include/nys/sockbuf.h)
+target_include_directories(sockbuf PUBLIC include)
 
-add_library(sockbuf src/sockbuf.cpp src/sockbuf.h)
-
-add_executable(sockbuf-test test/sockbuf.test.cpp test/sockbuf.test.h)
+add_executable(sockbuf-test EXCLUDE_FROM_ALL test/sockbuf.test.cpp test/sockbuf.test.h)
 target_link_libraries(sockbuf-test PUBLIC sockbuf gtest_main)
 target_include_directories(sockbuf-test PUBLIC src)

@@ -2,7 +2,7 @@
 #include <sys/fcntl.h>
 #include <sys/ioctl.h>
 #include <unistd.h>
-#include "sockbuf.h"
+#include "../include/nys/sockbuf.h"
 
 using namespace nys;
 

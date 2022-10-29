@@ -5,7 +5,7 @@
 #include <filesystem>
 #include <cstdio>
 #include <sys/syslimits.h>
-#include "sockbuf.h"
+#include "../include/nys/sockbuf.h"
 
 class UnixSocketTest : public ::testing::Test
 {
