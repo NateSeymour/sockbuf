@@ -9,7 +9,7 @@
 #include <sys/socket.h>
 #include <cerrno>
 
-namespace nys::whisper
+namespace nys
 {
     enum class SockOpts : uint32_t
     {
@@ -47,6 +47,7 @@ namespace nys::whisper
         }
 
         explicit FileDescriptor(int fd) : fd_(fd) {}
+
         FileDescriptor() = delete;
         FileDescriptor(const FileDescriptor&) = delete;
         FileDescriptor(FileDescriptor&&) = delete;

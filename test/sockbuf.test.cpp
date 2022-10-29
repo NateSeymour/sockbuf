@@ -3,7 +3,7 @@
 #include <ostream>
 #include "sockbuf.test.h"
 
-using namespace nys::whisper;
+using namespace nys;
 
 TEST_F(UnixSocketTest, ServerClient)
 {

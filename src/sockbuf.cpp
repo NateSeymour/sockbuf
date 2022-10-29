@@ -4,7 +4,7 @@
 #include <unistd.h>
 #include "sockbuf.h"
 
-using namespace nys::whisper;
+using namespace nys;
 
 sockbuf sockbuf::UnixSocket(const std::filesystem::path& path, SockMode mode, uint32_t options)
 {
