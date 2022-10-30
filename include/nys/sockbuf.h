@@ -8,6 +8,7 @@
 #include <exception>
 #include <sys/socket.h>
 #include <cerrno>
+#include <unistd.h>
 
 namespace nys
 {
