@@ -69,8 +69,10 @@ namespace nys
         static sockbuf UnixSocket(const std::filesystem::path& path, SockMode mode = SockMode::Client, uint32_t options = 0);
 
         sockbuf Accept();
+        void Close();
 
         sockbuf(const sockbuf& other) : props(other.props), fd_(dup(other.fd_)) {}
+        ~sockbuf();
     };
 
     class socket_error : public std::exception

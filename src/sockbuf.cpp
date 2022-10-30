@@ -109,6 +109,20 @@ sockbuf sockbuf::Accept()
     return socket;
 }
 
+void sockbuf::Close()
+{
+    if(this->fd_ != -1)
+    {
+        close(this->fd_);
+        this->fd_ = -1;
+    }
+}
+
+sockbuf::~sockbuf()
+{
+    this->Close();
+}
+
 std::streamsize sockbuf::xsputn(const char *s, std::streamsize n)
 {
     std::streamsize total_bytes_written = 0;
